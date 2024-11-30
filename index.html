@@ -176,7 +176,8 @@
     </div>
 
     <script>
-        const IMGBB_API_KEY = '1108f9c7009d32f845dd84e36e691b19'; // Replace with the actual API key
+        const FIREBASE_URL = 'https://tempreader-2024-default-rtdb.firebaseio.com';
+        const IMGBB_API_KEY = 'YOUR_API_KEY_HERE'; // Replace with your IMGBB API key
         let currentFolderId = null;
 
         async function uploadImages() {
@@ -195,6 +196,7 @@
 
             currentFolderId = generateFolderId();
 
+            const uploadedImages = [];
             const uploadPromises = Array.from(files).map(async (file) => {
                 const formData = new FormData();
                 formData.append('image', file);
@@ -208,12 +210,10 @@
                     const result = await response.json();
                     
                     if (result.success) {
-                        const images = JSON.parse(localStorage.getItem(currentFolderId) || '[]');
-                        images.push({
+                        uploadedImages.push({
                             url: result.data.url,
                             deleteUrl: result.data.delete_url
                         });
-                        localStorage.setItem(currentFolderId, JSON.stringify(images));
                     }
                 } catch (error) {
                     console.error('Upload error:', error);
@@ -226,7 +226,8 @@
             krispIdDisplay.textContent = `Krisp ID: ${currentFolderId}`;
             krispIdDisplay.style.display = 'block';
 
-            displayImages(currentFolderId);
+            saveImagesToFirebase(currentFolderId, uploadedImages);
+            displayImages(uploadedImages);
             fileInput.value = ''; 
         }
 
@@ -234,7 +235,21 @@
             return Math.random().toString(36).substring(2, 10).toUpperCase();
         }
 
-        function loadFolder() {
+        async function saveImagesToFirebase(folderId, images) {
+            try {
+                await fetch(`${FIREBASE_URL}/folders/${folderId}.json`, {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(images),
+                });
+            } catch (error) {
+                console.error('Firebase save error:', error);
+            }
+        }
+
+        async function loadFolder() {
             const krispIdInput = document.getElementById('krispIdInput');
             const krispIdDisplay = document.getElementById('krispIdDisplay');
             const folderId = krispIdInput.value.trim().toUpperCase();
@@ -243,22 +258,30 @@
                 currentFolderId = folderId;
                 krispIdDisplay.textContent = `Krisp ID: ${currentFolderId}`;
                 krispIdDisplay.style.display = 'block';
-                displayImages(folderId);
+                fetchImagesFromFirebase(folderId);
             } else {
                 alert('Please enter a valid Krisp ID');
             }
         }
 
-        function displayImages(folderId) {
+        async function fetchImagesFromFirebase(folderId) {
+            try {
+                const response = await fetch(`${FIREBASE_URL}/folders/${folderId}.json`);
+                const images = await response.json();
+                
+                if (images) {
+                    displayImages(images);
+                } else {
+                    alert('No images found for this Krisp ID');
+                }
+            } catch (error) {
+                console.error('Firebase fetch error:', error);
+            }
+        }
+
+        function displayImages(images) {
             const imageGrid = document.getElementById('imageGrid');
             imageGrid.innerHTML = ''; 
-
-            const images = JSON.parse(localStorage.getItem(folderId) || '[]');
-            
-            if (images.length === 0) {
-                imageGrid.innerHTML = '<p>No images found for this Krisp ID</p>';
-                return;
-            }
 
             images.forEach((image, index) => {
                 const imageContainer = document.createElement('div');
